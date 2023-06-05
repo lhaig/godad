@@ -1,2 +1,2 @@
 # godad
-Golang library for https://icanhazdadjoke.com/
+Golang package for https://icanhazdadjoke.com/
