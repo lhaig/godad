@@ -1,6 +1,9 @@
 # godad
 Golang package for https://icanhazdadjoke.com/
 
+## Requirements
+Go 1.20.x
+
 ## Build the package.
 
 ```bash
