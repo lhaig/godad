@@ -1,3 +1,3 @@
 module github.com/lhaig/godad
 
-go 1.20
+go 1.21
