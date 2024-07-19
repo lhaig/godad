@@ -1,6 +1,14 @@
 # godad
 
-Godad is a simple Go application that fetches and displays dad jokes from the [icanhazdadjoke.com](https://icanhazdadjoke.com/) API. It stores previously fetched jokes in a SQLite database to ensure you always get a fresh joke.
+Godad is a Go application that fetches and displays dad jokes from the [icanhazdadjoke.com](https://icanhazdadjoke.com/) API. It stores previously fetched jokes in a SQLite database to ensure you always get a fresh joke.
+
+## Features
+
+- Fetches jokes from the icanhazdadjoke.com API
+- Stores jokes in a SQLite database
+- Ensures each joke is unique (not previously fetched)
+- Configurable database location
+- Supports environment variables, .env file, and command-line flags for configuration
 
 ## Requirements
 
@@ -25,6 +33,41 @@ Godad is a simple Go application that fetches and displays dad jokes from the [i
    make build
    ```
 
+## Configuration
+
+You can configure the application using one of the following methods (in order of precedence):
+
+1. Command-line flags
+2. Environment variables
+3. .env file
+4. Default values
+
+### Configuration Options
+
+- `dbdir`: Directory to store the SQLite database (default: current directory)
+
+### Using a .env file
+
+Create a `.env` file in the root directory of the project with the following content:
+
+```
+DBDIR=/path/to/your/database/directory
+```
+
+### Using environment variables
+
+Set the `DBDIR` environment variable:
+
+```
+export DBDIR=/path/to/your/database/directory
+```
+
+### Using command-line flags
+
+```
+./bin/godad --dbdir /path/to/your/database/directory
+```
+
 ## Usage
 
 To run the application and get a dad joke:
@@ -33,7 +76,7 @@ To run the application and get a dad joke:
 make run
 ```
 
-This will fetch a new joke from the API and display it. If the joke has been seen before, it will fetch another one until it finds a new joke.
+This will fetch a new joke from the API, store it in the database, and display it. If the joke has been seen before, it will fetch another one until it finds a new joke.
 
 ## Development
 
@@ -86,6 +129,8 @@ To run the application in a Docker container:
 ```
 make docker-run
 ```
+
+Note: When using Docker, you might need to modify the Dockerfile to include your .env file or pass environment variables to the container for custom configuration.
 
 ## CI/CD
 

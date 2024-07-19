@@ -10,12 +10,15 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 )
 
 var (
@@ -32,16 +35,32 @@ type ResponseObject struct {
 }
 
 func main() {
+	// Initialize configuration
+	if err := initConfig(); err != nil {
+		log.Fatal().Err(err).Msg("Failed to initialize configuration")
+	}
+
 	// Initialize logger
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 
+	// Get database directory from configuration
+	dbDir := viper.GetString("dbdir")
+
+	// Ensure the database directory exists
+	if err := os.MkdirAll(dbDir, 0o755); err != nil {
+		log.Fatal().Err(err).Msg("Failed to create database directory")
+	}
+
 	// Initialize database
+	dbPath := filepath.Join(dbDir, "jokes.db")
 	var err error
-	db, err = sql.Open("sqlite3", "./jokes.db")
+	db, err = sql.Open("sqlite3", dbPath)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to open database")
 	}
 	defer db.Close()
+
+	log.Info().Str("path", dbPath).Msg("Database initialized")
 
 	// Create table if not exists
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS jokes (
@@ -64,15 +83,40 @@ func main() {
 	fmt.Println(joke)
 }
 
-// getFreshJoke fetches a joke that hasn't been used before
+func initConfig() error {
+	// Set default values
+	viper.SetDefault("dbdir", ".")
+
+	// Read from .env file
+	viper.SetConfigName(".env")
+	viper.SetConfigType("env")
+	viper.AddConfigPath(".")
+	if err := viper.ReadInConfig(); err != nil {
+		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+			return fmt.Errorf("error reading config file: %w", err)
+		}
+		// It's okay if the config file is not found, we'll use defaults and flags
+	}
+
+	// Read from environment variables
+	viper.AutomaticEnv()
+
+	// Define and parse flags
+	pflag.String("dbdir", viper.GetString("dbdir"), "Directory to store the SQLite database")
+	pflag.Parse()
+	viper.BindPFlags(pflag.CommandLine)
+
+	return nil
+}
+
 func getFreshJoke() (string, error) {
-	for {
+	maxRetries := 5
+	for i := 0; i < maxRetries; i++ {
 		joke, err := getJoke()
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("error fetching joke from API: %w", err)
 		}
 
-		// Check if joke exists in database
 		var count int
 		err = db.QueryRow("SELECT COUNT(*) FROM jokes WHERE joke = ?", joke).Scan(&count)
 		if err != nil {
@@ -80,7 +124,6 @@ func getFreshJoke() (string, error) {
 		}
 
 		if count == 0 {
-			// Joke doesn't exist, insert it and return
 			_, err = db.Exec("INSERT INTO jokes (joke) VALUES (?)", joke)
 			if err != nil {
 				return "", fmt.Errorf("error inserting joke: %w", err)
@@ -88,9 +131,10 @@ func getFreshJoke() (string, error) {
 			return joke, nil
 		}
 
-		// If joke exists, try again
 		log.Info().Msg("Joke already exists, fetching another one")
 	}
+
+	return "", fmt.Errorf("could not find a new joke after %d attempts", maxRetries)
 }
 
 // getJoke fetches a joke from the API
