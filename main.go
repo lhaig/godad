@@ -75,8 +75,14 @@ func main() {
 	// Get joke
 	joke, err := getFreshJoke()
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to get joke")
-		os.Exit(1)
+		log.Error().Err(err).Msg("Failed to get a fresh joke")
+		// Here you might want to implement a fallback strategy,
+		// such as returning a random joke from the database
+		randomJoke, err := getRandomJokeFromDB()
+		if err != nil {
+			log.Fatal().Err(err).Msg("Failed to get a random joke from the database")
+		}
+		joke = randomJoke
 	}
 
 	// Print joke
@@ -104,11 +110,16 @@ func initConfig() error {
 	// Define and parse flags
 	pflag.String("dbdir", viper.GetString("dbdir"), "Directory to store the SQLite database")
 	pflag.Parse()
-	viper.BindPFlags(pflag.CommandLine)
+
+	// Bind flags to viper
+	if err := viper.BindPFlags(pflag.CommandLine); err != nil {
+		return fmt.Errorf("error binding flags: %w", err)
+	}
 
 	return nil
 }
 
+// getFreshJoke fetches a joke that hasn't been used before
 func getFreshJoke() (string, error) {
 	maxRetries := 5
 	for i := 0; i < maxRetries; i++ {
@@ -117,6 +128,7 @@ func getFreshJoke() (string, error) {
 			return "", fmt.Errorf("error fetching joke from API: %w", err)
 		}
 
+		// Check if joke exists in database
 		var count int
 		err = db.QueryRow("SELECT COUNT(*) FROM jokes WHERE joke = ?", joke).Scan(&count)
 		if err != nil {
@@ -124,6 +136,7 @@ func getFreshJoke() (string, error) {
 		}
 
 		if count == 0 {
+			// Joke doesn't exist, insert it and return
 			_, err = db.Exec("INSERT INTO jokes (joke) VALUES (?)", joke)
 			if err != nil {
 				return "", fmt.Errorf("error inserting joke: %w", err)
@@ -131,9 +144,11 @@ func getFreshJoke() (string, error) {
 			return joke, nil
 		}
 
+		// If joke exists, log and try again
 		log.Info().Msg("Joke already exists, fetching another one")
 	}
 
+	// If we've reached this point, we couldn't find a new joke after maxRetries
 	return "", fmt.Errorf("could not find a new joke after %d attempts", maxRetries)
 }
 
@@ -178,6 +193,16 @@ func getJoke() (string, error) {
 	}
 
 	return responseObject.Joke, nil
+}
+
+// getRandomJokeFromDB retrieves a random joke from the database
+func getRandomJokeFromDB() (string, error) {
+	var joke string
+	err := db.QueryRow("SELECT joke FROM jokes ORDER BY RANDOM() LIMIT 1").Scan(&joke)
+	if err != nil {
+		return "", fmt.Errorf("error getting random joke from database: %w", err)
+	}
+	return joke, nil
 }
 
 // setAPIURL allows changing the API URL (used for testing)
