@@ -1,15 +1,26 @@
+.PHONY: build run test lint docker-build docker-run test-coverage
+
 build:
-	go build -o bin/godad main.go
+	go build -o bin/godad
 
-compile:
-	echo "Compiling for multiple platforms"
-	GOOS=darwin GOARCH=amd64 go build -o bin/godad-darwin main.go
-	# GOOS=linux GOARCH=amd64 go build -o bin/godad-linux-amd64 main.go
-	# GOOS=linux GOARCH=arm64 go build -o bin/godad-linux-arm64 main.go
-	GOOS=windows GOARCH=amd64 go build -o bin/godad-windows-amd64.exe main.go
+run: build
+	./bin/godad
 
-code_vul_scan:
-	time gosec ./...
+test:
+	go test -v ./...
 
-run:
-	go run main.go
+lint:
+	golangci-lint run
+
+lint-fix:
+	golangci-lint run --fix
+
+docker-build:
+	docker build -t godad .
+
+docker-run: docker-build
+	docker run --rm godad
+
+test-coverage:
+	go test -v -coverprofile=coverage.out ./...
+	go tool cover -html=coverage.out -o coverage.html
