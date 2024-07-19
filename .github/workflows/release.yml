@@ -2,7 +2,6 @@ name: Release Go project
 
 on:
   release:
-    types: [published]
 
 jobs:
   build:
