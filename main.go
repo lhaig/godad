@@ -64,7 +64,7 @@ func main() {
 
 	// Create table if not exists
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS jokes (
-		id TEXT PRIMARY KEY,
+		id INTEGER PRIMARY KEY,
 		joke TEXT NOT NULL,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	)`)
@@ -90,20 +90,26 @@ func main() {
 }
 
 func initConfig() error {
+	homedrive, err := os.UserHomeDir()
+	if err != nil {
+		log.Err(err)
+	}
+	dblocation := homedrive + "/.godad"
 	// Set default values
-	viper.SetDefault("dbdir", ".")
+	viper.SetDefault("dbdir", dblocation)
 
 	// Read from .env file
-	viper.SetConfigName(".env")
+	viper.SetConfigName("config")
 	viper.SetConfigType("env")
 	viper.AddConfigPath(".")
+	viper.AddConfigPath(homedrive + "/.godad")
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
 			return fmt.Errorf("error reading config file: %w", err)
 		}
 		// It's okay if the config file is not found, we'll use defaults and flags
 	}
-
+	fmt.Println("Using config file:", viper.ConfigFileUsed())
 	// Read from environment variables
 	viper.AutomaticEnv()
 
