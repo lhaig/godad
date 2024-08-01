@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -188,6 +189,12 @@ func TestInitConfig(t *testing.T) {
 		}
 	}()
 
+	// Set a mock home directory for testing
+	mockHomeDir := "/mock/home"
+	os.Setenv("HOME", mockHomeDir)
+
+	defaultDBDir := filepath.Join(mockHomeDir, ".godad")
+
 	// Test cases
 	testCases := []struct {
 		name        string
@@ -199,7 +206,7 @@ func TestInitConfig(t *testing.T) {
 			name:        "Default",
 			envVars:     map[string]string{},
 			args:        []string{},
-			expectedDir: ".",
+			expectedDir: defaultDBDir,
 		},
 		{
 			name:        "EnvVar",
@@ -229,6 +236,7 @@ func TestInitConfig(t *testing.T) {
 
 			// Set environment variables
 			os.Clearenv()
+			os.Setenv("HOME", mockHomeDir) // Ensure HOME is always set
 			for k, v := range tc.envVars {
 				os.Setenv(k, v)
 			}
