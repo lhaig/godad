@@ -14,9 +14,6 @@ import (
 	"github.com/spf13/viper"
 )
 
-var apiURL string // Declare apiURL variable globally
-var language string // Declare language variable globally
-
 func TestMain(m *testing.M) {
 	// Set up test configuration
 	viper.Set("dbdir", ":memory:")
