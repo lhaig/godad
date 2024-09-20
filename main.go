@@ -1,6 +1,3 @@
-// Copyright (c) 2024 Lance Haig
-// SPDX-License-Identifier: MPL-2.0
-
 package main
 
 import (
@@ -176,6 +173,7 @@ func getJoke() (string, error) {
 	var resp *http.Response
 	enUrl := enApiURL
 	deUrl := deAPIURL
+
 	if enApiURL != "" {
 		// Create a new en request
 		enReq, err := http.NewRequest("GET", enUrl, nil)
@@ -187,13 +185,13 @@ func getJoke() (string, error) {
 		enReq.Header.Set("Accept", "application/json")
 
 		// Send the request
-		resp, err := client.Do(enReq)
+		resp, err = client.Do(enReq)
 		if err != nil {
 			return "", fmt.Errorf("error sending request: %w", err)
 		}
 		defer resp.Body.Close()
-
 	}
+
 	if deAPIURL != "" {
 		// Create a new de request
 		deReq, err := http.NewRequest("GET", deUrl, nil)
@@ -206,12 +204,15 @@ func getJoke() (string, error) {
 		deReq.Header.Set("Accept", "application/json")
 
 		// Send the request
-		resp, err := client.Do(deReq)
+		resp, err = client.Do(deReq)
 		if err != nil {
 			return "", fmt.Errorf("error sending request: %w", err)
 		}
 		defer resp.Body.Close()
-		// Read the response body
+	}
+
+	if resp == nil {
+		return "", fmt.Errorf("no valid API URL provided")
 	}
 
 	body, err := io.ReadAll(resp.Body)
