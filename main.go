@@ -22,9 +22,10 @@ import (
 )
 
 var (
-	apiURL = "https://icanhazdadjoke.com/"
-	mu     sync.RWMutex
-	db     *sql.DB
+	enApiURL = "https://icanhazdadjoke.com/"
+	deAPIURL = "https://raw.githubusercontent.com/derphilipp/Flachwitze/main/README.md"
+	mu       sync.RWMutex
+	db       *sql.DB
 )
 
 // ResponseObject represents the structure of the API response
@@ -52,7 +53,7 @@ func main() {
 	}
 
 	// Initialize database
-	dbPath := filepath.Join(dbDir, "jokes.db")
+	dbPath := filepath.Join(dbDir, "jokesdev.db")
 	var err error
 	db, err = sql.Open("sqlite3", dbPath)
 	if err != nil {
@@ -60,7 +61,7 @@ func main() {
 	}
 	defer db.Close()
 
-	log.Info().Str("path", dbPath).Msg("Database initialized")
+	log.Info().Str("path", dbPath).Msg("SQLite Database initialized")
 
 	// Create table if not exists
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS jokes (
@@ -164,29 +165,47 @@ func getJoke() (string, error) {
 	client := &http.Client{
 		Timeout: 10 * time.Second,
 	}
+	var resp *http.Response
+	enUrl := enApiURL
+	deUrl := deAPIURL
+	if enApiURL != "" {
+		// Create a new en request
+		enReq, err := http.NewRequest("GET", enUrl, nil)
+		if err != nil {
+			return "", fmt.Errorf("error creating request: %w", err)
+		}
+		// Set headers
+		enReq.Header.Set("User-Agent", "https://github.com/lhaig/godad")
+		enReq.Header.Set("Accept", "application/json")
 
-	mu.RLock()
-	url := apiURL
-	mu.RUnlock()
+		// Send the request
+		resp, err := client.Do(enReq)
+		if err != nil {
+			return "", fmt.Errorf("error sending request: %w", err)
+		}
+		defer resp.Body.Close()
 
-	// Create a new request
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return "", fmt.Errorf("error creating request: %w", err)
+	}
+	if deAPIURL != "" {
+		// Create a new de request
+		deReq, err := http.NewRequest("GET", deUrl, nil)
+		if err != nil {
+			return "", fmt.Errorf("error creating request: %w", err)
+		}
+
+		// Set headers
+		deReq.Header.Set("User-Agent", "https://github.com/lhaig/godad")
+		deReq.Header.Set("Accept", "application/json")
+
+		// Send the request
+		resp, err := client.Do(deReq)
+		if err != nil {
+			return "", fmt.Errorf("error sending request: %w", err)
+		}
+		defer resp.Body.Close()
+		// Read the response body
 	}
 
-	// Set headers
-	req.Header.Set("User-Agent", "https://github.com/lhaig/godad")
-	req.Header.Set("Accept", "application/json")
-
-	// Send the request
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("error sending request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// Read the response body
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", fmt.Errorf("error reading response body: %w", err)
@@ -209,11 +228,4 @@ func getRandomJokeFromDB() (string, error) {
 		return "", fmt.Errorf("error getting random joke from database: %w", err)
 	}
 	return joke, nil
-}
-
-// setAPIURL allows changing the API URL (used for testing)
-func setAPIURL(url string) {
-	mu.Lock()
-	apiURL = url
-	mu.Unlock()
 }
