@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -63,10 +64,10 @@ func main() {
 
 	// Create table if not exists
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS jokes (
-		id INTEGER PRIMARY KEY,
-		joke TEXT NOT NULL,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-	)`)
+         id INTEGER PRIMARY KEY,
+         joke TEXT NOT NULL,
+         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+     )`)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to create table")
 	}
@@ -171,67 +172,78 @@ func getJoke() (string, error) {
 		Timeout: 10 * time.Second,
 	}
 	var resp *http.Response
-	enUrl := enApiURL
-	deUrl := deAPIURL
 
+	// Try to get a joke from the JSON API first
 	if enApiURL != "" {
-		// Create a new en request
-		enReq, err := http.NewRequest("GET", enUrl, nil)
+		enReq, err := http.NewRequest("GET", enApiURL, nil)
 		if err != nil {
 			return "", fmt.Errorf("error creating request: %w", err)
 		}
-		// Set headers
 		enReq.Header.Set("User-Agent", "https://github.com/lhaig/godad")
 		enReq.Header.Set("Accept", "application/json")
 
-		// Send the request
 		resp, err = client.Do(enReq)
 		if err != nil {
 			return "", fmt.Errorf("error sending request: %w", err)
 		}
 		defer resp.Body.Close()
+
+		// Check if the response is JSON
+		if resp.Header.Get("Content-Type") == "application/json" {
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return "", fmt.Errorf("error reading response body: %w", err)
+			}
+
+			var responseObject ResponseObject
+			if err := json.Unmarshal(body, &responseObject); err != nil {
+				return "", fmt.Errorf("error parsing JSON: %w", err)
+			}
+			return responseObject.Joke, nil
+		}
 	}
 
+	// If the response is not JSON, try to get a joke from the markdown file
 	if deAPIURL != "" {
-		// Create a new de request
-		deReq, err := http.NewRequest("GET", deUrl, nil)
+		deReq, err := http.NewRequest("GET", deAPIURL, nil)
 		if err != nil {
 			return "", fmt.Errorf("error creating request: %w", err)
 		}
 
-		// Set headers
-		deReq.Header.Set("User-Agent", "https://github.com/lhaig/godad")
-		deReq.Header.Set("Accept", "application/json")
-
-		// Send the request
 		resp, err = client.Do(deReq)
 		if err != nil {
 			return "", fmt.Errorf("error sending request: %w", err)
 		}
 		defer resp.Body.Close()
+
+		// Read the markdown content
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return "", fmt.Errorf("error reading response body: %w", err)
+		}
+
+		// Extract jokes from the markdown content
+		jokes := extractJokesFromMarkdown(string(body))
+		if len(jokes) > 0 {
+			return jokes[0], nil // Return the first joke found
+		}
 	}
 
-	if resp == nil {
-		return "", fmt.Errorf("no valid API URL provided")
-	}
+	return "", fmt.Errorf("no valid API URL provided or no jokes found")
+}
 
-	// Check if the response content type is application/json
-	if resp.Header.Get("Content-Type") != "application/json" {
-		return "", fmt.Errorf("unexpected content type: %s", resp.Header.Get("Content-Type"))
+// extractJokesFromMarkdown extracts jokes from the markdown content
+func extractJokesFromMarkdown(markdown string) []string {
+	var jokes []string
+	lines := strings.Split(markdown, "\n")
+	for _, line := range lines {
+		// Assuming jokes are listed with a specific marker, e.g., "- "
+		if strings.HasPrefix(line, "- ") {
+			joke := strings.TrimPrefix(line, "- ")
+			jokes = append(jokes, joke)
+		}
 	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("error reading response body: %w", err)
-	}
-
-	// Parse the JSON response
-	var responseObject ResponseObject
-	if err := json.Unmarshal(body, &responseObject); err != nil {
-		return "", fmt.Errorf("error parsing JSON: %w", err)
-	}
-
-	return responseObject.Joke, nil
+	return jokes
 }
 
 // getRandomJokeFromDB retrieves a random joke from the database
