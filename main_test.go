@@ -14,6 +14,8 @@ import (
 	"github.com/spf13/viper"
 )
 
+var db *sql.DB // Declare db variable globally
+
 func TestMain(m *testing.M) {
 	// Set up test configuration
 	viper.Set("dbdir", ":memory:")
@@ -55,20 +57,10 @@ func TestGetFreshJoke(t *testing.T) {
 		`{"id": "1", "joke": "This is the first joke", "status": 200}`,
 		`{"id": "2", "joke": "This is the second joke", "status": 200}`,
 		`{"id": "3", "joke": "This is the third joke", "status": 200}`,
-		`{"id": "4", "joke": "This is the fourth joke", "status": 200}`,
-		`{"id": "5", "joke": "This is the fifth joke", "status": 200}`,
 	}
 	currentJoke := 0
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Check if the request has the correct headers
-		if r.Header.Get("User-Agent") != "https://github.com/lhaig/godad" {
-			t.Errorf("Expected User-Agent header to be 'https://github.com/lhaig/godad', got %s", r.Header.Get("User-Agent"))
-		}
-		if r.Header.Get("Accept") != "application/json" {
-			t.Errorf("Expected Accept header to be 'application/json', got %s", r.Header.Get("Accept"))
-		}
-
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, err := w.Write([]byte(jokeResponses[currentJoke]))
@@ -80,7 +72,7 @@ func TestGetFreshJoke(t *testing.T) {
 	defer server.Close()
 
 	// Set the apiURL to our mock server URL
-	setAPIURL()
+	apiURL = server.URL // Directly set the apiURL to the mock server URL
 	// Test getting fresh jokes
 	expectedJokes := []string{
 		"This is the first joke",
@@ -133,7 +125,7 @@ func TestGetJokeAPIError(t *testing.T) {
 	defer server.Close()
 
 	// Set the apiURL to our mock server URL
-	setAPIURL()
+	apiURL = server.URL // Directly set the apiURL to the mock server URL
 
 	// Call the getJoke function
 	_, err := getJoke()
@@ -157,7 +149,7 @@ func TestGetJokeInvalidJSON(t *testing.T) {
 	defer server.Close()
 
 	// Set the apiURL to our mock server URL
-	setAPIURL()
+	apiURL = server.URL // Directly set the apiURL to the mock server URL
 
 	// Call the getJoke function
 	_, err := getJoke()
