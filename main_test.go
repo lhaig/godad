@@ -14,12 +14,15 @@ import (
 	"github.com/spf13/viper"
 )
 
+var db *sql.DB
+
 func TestMain(m *testing.M) {
 	// Set up test configuration
 	viper.Set("dbdir", ":memory:")
 
-	// Set up test database
-	db, err := sql.Open("sqlite3", ":memory:")
+	// Initialize the database
+	var err error
+	db, err = sql.Open("sqlite3", ":memory:")
 	if err != nil {
 		panic(err)
 	}
@@ -44,13 +47,7 @@ func TestMain(m *testing.M) {
 
 func TestGetFreshJoke(t *testing.T) {
 	// Clear the database before the test
-	db, err := sql.Open("sqlite3", ":memory:")
-	if err != nil {
-		t.Fatalf("Failed to open test database: %v", err)
-	}
-	defer db.Close()
-
-	_, err = db.Exec("DELETE FROM jokes")
+	_, err := db.Exec("DELETE FROM jokes")
 	if err != nil {
 		t.Fatalf("Failed to clear the database: %v", err)
 	}
