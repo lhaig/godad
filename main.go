@@ -26,6 +26,7 @@ var (
 	deAPIURL = "https://raw.githubusercontent.com/derphilipp/Flachwitze/main/README.md"
 	mu       sync.RWMutex
 	db       *sql.DB
+	apiURL   string // Define apiURL variable
 )
 
 // ResponseObject represents the structure of the API response
@@ -124,6 +125,13 @@ func initConfig() error {
 	}
 
 	return nil
+}
+
+// setAPIURL sets the apiURL variable
+func setAPIURL(url string) {
+	mu.Lock()
+	defer mu.Unlock()
+	apiURL = url
 }
 
 // getFreshJoke fetches a joke that hasn't been used before
