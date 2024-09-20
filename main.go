@@ -25,6 +25,7 @@ var (
 	mu       sync.RWMutex
 	db       *sql.DB
 	apiURL   string // Define apiURL variable
+	language string // Define language variable
 )
 
 // ResponseObject represents the structure of the API response
@@ -64,10 +65,10 @@ func main() {
 
 	// Create table if not exists
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS jokes (
-         id INTEGER PRIMARY KEY,
-         joke TEXT NOT NULL,
-         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-     )`)
+		id INTEGER PRIMARY KEY,
+		joke TEXT NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	)`)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to create table")
 	}
@@ -115,6 +116,7 @@ func initConfig() error {
 
 	// Define and parse flags
 	pflag.String("dbdir", viper.GetString("dbdir"), "Directory to store the SQLite database")
+	pflag.StringVar(&language, "lang", "en", "Language for jokes (en or de)")
 	pflag.Parse()
 
 	// Bind flags to viper
@@ -122,14 +124,21 @@ func initConfig() error {
 		return fmt.Errorf("error binding flags: %w", err)
 	}
 
+	// Set the API URL based on the selected language
+	setAPIURL()
+
 	return nil
 }
 
-// setAPIURL sets the apiURL variable
-func setAPIURL(url string) {
+// setAPIURL sets the apiURL variable based on the selected language
+func setAPIURL() {
 	mu.Lock()
 	defer mu.Unlock()
-	apiURL = url
+	if language == "de" {
+		apiURL = deAPIURL
+	} else {
+		apiURL = enApiURL
+	}
 }
 
 // getFreshJoke fetches a joke that hasn't been used before
@@ -173,16 +182,16 @@ func getJoke() (string, error) {
 	}
 	var resp *http.Response
 
-	// Try to get a joke from the JSON API first
-	if enApiURL != "" {
-		enReq, err := http.NewRequest("GET", enApiURL, nil)
+	// Try to get a joke from the selected API
+	if apiURL != "" {
+		req, err := http.NewRequest("GET", apiURL, nil)
 		if err != nil {
 			return "", fmt.Errorf("error creating request: %w", err)
 		}
-		enReq.Header.Set("User-Agent", "https://github.com/lhaig/godad")
-		enReq.Header.Set("Accept", "application/json")
+		req.Header.Set("User-Agent", "https://github.com/lhaig/godad")
+		req.Header.Set("Accept", "application/json")
 
-		resp, err = client.Do(enReq)
+		resp, err = client.Do(req)
 		if err != nil {
 			return "", fmt.Errorf("error sending request: %w", err)
 		}
@@ -200,32 +209,6 @@ func getJoke() (string, error) {
 				return "", fmt.Errorf("error parsing JSON: %w", err)
 			}
 			return responseObject.Joke, nil
-		}
-	}
-
-	// If the response is not JSON, try to get a joke from the markdown file
-	if deAPIURL != "" {
-		deReq, err := http.NewRequest("GET", deAPIURL, nil)
-		if err != nil {
-			return "", fmt.Errorf("error creating request: %w", err)
-		}
-
-		resp, err = client.Do(deReq)
-		if err != nil {
-			return "", fmt.Errorf("error sending request: %w", err)
-		}
-		defer resp.Body.Close()
-
-		// Read the markdown content
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return "", fmt.Errorf("error reading response body: %w", err)
-		}
-
-		// Extract jokes from the markdown content
-		jokes := extractJokesFromMarkdown(string(body))
-		if len(jokes) > 0 {
-			return jokes[0], nil // Return the first joke found
 		}
 	}
 
