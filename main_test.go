@@ -198,30 +198,42 @@ func TestInitConfig(t *testing.T) {
 		envVars     map[string]string
 		args        []string
 		expectedDir string
+		expectedLang string
 	}{
 		{
 			name:        "Default",
 			envVars:     map[string]string{},
 			args:        []string{},
 			expectedDir: defaultDBDir,
+			expectedLang: "en",
 		},
 		{
 			name:        "EnvVar",
 			envVars:     map[string]string{"DBDIR": "/env/path"},
 			args:        []string{},
 			expectedDir: "/env/path",
+			expectedLang: "en",
 		},
 		{
 			name:        "Flag",
 			envVars:     map[string]string{},
 			args:        []string{"--dbdir", "/flag/path"},
 			expectedDir: "/flag/path",
+			expectedLang: "en",
 		},
 		{
 			name:        "FlagOverridesEnvVar",
 			envVars:     map[string]string{"DBDIR": "/env/path"},
 			args:        []string{"--dbdir", "/flag/path"},
 			expectedDir: "/flag/path",
+			expectedLang: "en",
+		},
+		{
+			name:        "LanguageFlag",
+			envVars:     map[string]string{},
+			args:        []string{"--lang", "de"},
+			expectedDir: defaultDBDir,
+			expectedLang: "de",
 		},
 	}
 
@@ -250,6 +262,11 @@ func TestInitConfig(t *testing.T) {
 			// Check result
 			if dir := viper.GetString("dbdir"); dir != tc.expectedDir {
 				t.Errorf("Expected dbdir to be %s, got %s", tc.expectedDir, dir)
+			}
+
+			// Check language
+			if lang := language; lang != tc.expectedLang {
+				t.Errorf("Expected language to be %s, got %s", tc.expectedLang, lang)
 			}
 		})
 	}
