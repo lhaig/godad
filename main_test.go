@@ -80,10 +80,7 @@ func TestGetFreshJoke(t *testing.T) {
 	defer server.Close()
 
 	// Set the apiURL to our mock server URL
-	originalAPIURL := apiURL
-	setAPIURL(server.URL) // Update this line to pass the server URL
-	defer setAPIURL(originalAPIURL) // Update this line to pass the original API URL
-
+	setAPIURL()
 	// Test getting fresh jokes
 	expectedJokes := []string{
 		"This is the first joke",
@@ -136,9 +133,7 @@ func TestGetJokeAPIError(t *testing.T) {
 	defer server.Close()
 
 	// Set the apiURL to our mock server URL
-	originalAPIURL := apiURL
-	setAPIURL(server.URL) // Update this line to pass the server URL
-	defer setAPIURL(originalAPIURL) // Update this line to pass the original API URL
+	setAPIURL()
 
 	// Call the getJoke function
 	_, err := getJoke()
@@ -162,9 +157,7 @@ func TestGetJokeInvalidJSON(t *testing.T) {
 	defer server.Close()
 
 	// Set the apiURL to our mock server URL
-	originalAPIURL := apiURL
-	setAPIURL(server.URL) // Update this line to pass the server URL
-	defer setAPIURL(originalAPIURL) // Update this line to pass the original API URL
+	setAPIURL()
 
 	// Call the getJoke function
 	_, err := getJoke()
@@ -194,45 +187,45 @@ func TestInitConfig(t *testing.T) {
 
 	// Test cases
 	testCases := []struct {
-		name        string
-		envVars     map[string]string
-		args        []string
-		expectedDir string
+		name         string
+		envVars      map[string]string
+		args         []string
+		expectedDir  string
 		expectedLang string
 	}{
 		{
-			name:        "Default",
-			envVars:     map[string]string{},
-			args:        []string{},
-			expectedDir: defaultDBDir,
+			name:         "Default",
+			envVars:      map[string]string{},
+			args:         []string{},
+			expectedDir:  defaultDBDir,
 			expectedLang: "en",
 		},
 		{
-			name:        "EnvVar",
-			envVars:     map[string]string{"DBDIR": "/env/path"},
-			args:        []string{},
-			expectedDir: "/env/path",
+			name:         "EnvVar",
+			envVars:      map[string]string{"DBDIR": "/env/path"},
+			args:         []string{},
+			expectedDir:  "/env/path",
 			expectedLang: "en",
 		},
 		{
-			name:        "Flag",
-			envVars:     map[string]string{},
-			args:        []string{"--dbdir", "/flag/path"},
-			expectedDir: "/flag/path",
+			name:         "Flag",
+			envVars:      map[string]string{},
+			args:         []string{"--dbdir", "/flag/path"},
+			expectedDir:  "/flag/path",
 			expectedLang: "en",
 		},
 		{
-			name:        "FlagOverridesEnvVar",
-			envVars:     map[string]string{"DBDIR": "/env/path"},
-			args:        []string{"--dbdir", "/flag/path"},
-			expectedDir: "/flag/path",
+			name:         "FlagOverridesEnvVar",
+			envVars:      map[string]string{"DBDIR": "/env/path"},
+			args:         []string{"--dbdir", "/flag/path"},
+			expectedDir:  "/flag/path",
 			expectedLang: "en",
 		},
 		{
-			name:        "LanguageFlag",
-			envVars:     map[string]string{},
-			args:        []string{"--lang", "de"},
-			expectedDir: defaultDBDir,
+			name:         "LanguageFlag",
+			envVars:      map[string]string{},
+			args:         []string{"--lang", "de"},
+			expectedDir:  defaultDBDir,
 			expectedLang: "de",
 		},
 	}
