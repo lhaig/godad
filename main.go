@@ -215,6 +215,11 @@ func getJoke() (string, error) {
 		return "", fmt.Errorf("no valid API URL provided")
 	}
 
+	// Check if the response content type is application/json
+	if resp.Header.Get("Content-Type") != "application/json" {
+		return "", fmt.Errorf("unexpected content type: %s", resp.Header.Get("Content-Type"))
+	}
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", fmt.Errorf("error reading response body: %w", err)
