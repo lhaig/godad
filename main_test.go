@@ -14,15 +14,15 @@ import (
 	"github.com/spf13/viper"
 )
 
-var db *sql.DB // Declare db variable globally
+var apiURL string // Declare apiURL variable globally
+var language string // Declare language variable globally
 
 func TestMain(m *testing.M) {
 	// Set up test configuration
 	viper.Set("dbdir", ":memory:")
 
 	// Set up test database
-	var err error
-	db, err = sql.Open("sqlite3", ":memory:")
+	db, err := sql.Open("sqlite3", ":memory:")
 	if err != nil {
 		panic(err)
 	}
@@ -47,7 +47,13 @@ func TestMain(m *testing.M) {
 
 func TestGetFreshJoke(t *testing.T) {
 	// Clear the database before the test
-	_, err := db.Exec("DELETE FROM jokes")
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatalf("Failed to open test database: %v", err)
+	}
+	defer db.Close()
+
+	_, err = db.Exec("DELETE FROM jokes")
 	if err != nil {
 		t.Fatalf("Failed to clear the database: %v", err)
 	}
