@@ -1,6 +1,3 @@
-// Copyright (c) 2024 Lance Haig
-// SPDX-License-Identifier: MPL-2.0
-
 package main
 
 import (
@@ -84,8 +81,8 @@ func TestGetFreshJoke(t *testing.T) {
 
 	// Set the apiURL to our mock server URL
 	originalAPIURL := apiURL
-	setAPIURL(server.URL)
-	defer setAPIURL(originalAPIURL)
+	setAPIURL(server.URL) // Update this line to pass the server URL
+	defer setAPIURL(originalAPIURL) // Update this line to pass the original API URL
 
 	// Test getting fresh jokes
 	expectedJokes := []string{
@@ -140,8 +137,8 @@ func TestGetJokeAPIError(t *testing.T) {
 
 	// Set the apiURL to our mock server URL
 	originalAPIURL := apiURL
-	setAPIURL(server.URL)
-	defer setAPIURL(originalAPIURL)
+	setAPIURL(server.URL) // Update this line to pass the server URL
+	defer setAPIURL(originalAPIURL) // Update this line to pass the original API URL
 
 	// Call the getJoke function
 	_, err := getJoke()
@@ -166,8 +163,8 @@ func TestGetJokeInvalidJSON(t *testing.T) {
 
 	// Set the apiURL to our mock server URL
 	originalAPIURL := apiURL
-	setAPIURL(server.URL)
-	defer setAPIURL(originalAPIURL)
+	setAPIURL(server.URL) // Update this line to pass the server URL
+	defer setAPIURL(originalAPIURL) // Update this line to pass the original API URL
 
 	// Call the getJoke function
 	_, err := getJoke()
