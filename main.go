@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -12,15 +13,15 @@ import (
 	"sync"
 	"time"
 
-	_ "modernc.org/sqlite"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+	_ "modernc.org/sqlite"
 )
 
 var (
-	enApiURL = "https://icanhazdadjoke.com/"
+	enAPIURL = "https://icanhazdadjoke.com/"
 	deAPIURL = "https://raw.githubusercontent.com/derphilipp/Flachwitze/main/README.md"
 	mu       sync.RWMutex
 	db       *sql.DB
@@ -174,7 +175,7 @@ func setAPIURL() {
 	if language == "de" {
 		apiURL = deAPIURL
 	} else {
-		apiURL = enApiURL
+		apiURL = enAPIURL
 	}
 }
 
@@ -300,9 +301,9 @@ func getJoke() (string, error) {
 	return jokes[randInt(len(jokes))], nil
 }
 
-// randInt returns a random integer between 0 and max-1
-func randInt(max int) int {
-	return int(time.Now().UnixNano() % int64(max))
+// randInt returns a random integer between 0 and n-1
+func randInt(n int) int {
+	return rand.IntN(n) //nolint:gosec // cryptographic randomness not needed for joke selection
 }
 
 // extractJokesFromMarkdown extracts jokes from the markdown content

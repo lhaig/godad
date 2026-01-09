@@ -15,8 +15,7 @@ Godad is a Go application that fetches and displays dad jokes in multiple langua
 
 ## Requirements
 
-- Go 1.21 or later
-- SQLite3
+- Go 1.24 or later
 
 ## Installation
 
@@ -194,15 +193,16 @@ The application uses SQLite to store jokes. The database schema includes:
 - `id`: Unique identifier for each joke
 - `joke`: The joke text
 - `language`: Language code (`en` or `de`)
+- `shown`: Whether the joke has been displayed (used for German jokes rotation)
 - `created_at`: Timestamp when the joke was first fetched
 
 Jokes are tracked per language, so the same joke text can exist in both English and German databases without conflict.
 
 ### Migration
 
-If you're upgrading from an older version without language support, the application will automatically:
-- Add the `language` column to your existing database
-- Set all existing jokes to `language='en'` (English)
+If you're upgrading from an older version, the application will automatically:
+- Add the `language` column to your existing database (defaults to `en`)
+- Add the `shown` column for joke rotation tracking
 - Continue working without any data loss
 
 ## Acknowledgments

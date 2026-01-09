@@ -17,3 +17,6 @@ go.work
 
 .aider*
 godad
+
+# Generated data files
+*.dat

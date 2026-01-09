@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	_ "modernc.org/sqlite"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+	_ "modernc.org/sqlite"
 )
 
 func TestMain(m *testing.M) {
@@ -73,7 +73,7 @@ func TestGetFreshJoke(t *testing.T) {
 	}
 	currentJoke := 0
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, err := w.Write([]byte(jokeResponses[currentJoke]))
@@ -279,7 +279,7 @@ func TestSetAPIURL(t *testing.T) {
 		{
 			name:        "English language",
 			language:    "en",
-			expectedURL: enApiURL,
+			expectedURL: enAPIURL,
 		},
 		{
 			name:        "German language",
@@ -289,12 +289,12 @@ func TestSetAPIURL(t *testing.T) {
 		{
 			name:        "Default (empty string)",
 			language:    "",
-			expectedURL: enApiURL,
+			expectedURL: enAPIURL,
 		},
 		{
 			name:        "Unknown language defaults to English",
 			language:    "fr",
-			expectedURL: enApiURL,
+			expectedURL: enAPIURL,
 		},
 	}
 
@@ -468,7 +468,7 @@ func TestGetFreshJokeRetryLogic(t *testing.T) {
 
 	// Create a mock server that always returns the same joke
 	sameJoke := `{"id": "1", "joke": "Always the same joke", "status": 200}`
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, err := w.Write([]byte(sameJoke))
@@ -519,7 +519,7 @@ func TestGetFreshJokeWithDuplicates(t *testing.T) {
 
 	// Create a mock server that returns duplicate then unique joke
 	callCount := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 
