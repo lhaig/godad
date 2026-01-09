@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/pflag"
@@ -55,7 +55,7 @@ func main() {
 	// Initialize database
 	dbPath := filepath.Join(dbDir, "jokesdev.db")
 	var err error
-	db, err = sql.Open("sqlite3", dbPath)
+	db, err = sql.Open("sqlite", dbPath)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to open database")
 	}
@@ -67,10 +67,47 @@ func main() {
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS jokes (
 		id INTEGER PRIMARY KEY,
 		joke TEXT NOT NULL,
+		language TEXT NOT NULL DEFAULT 'en',
+		shown BOOLEAN NOT NULL DEFAULT 0,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	)`)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to create table")
+	}
+
+	// Create metadata table for tracking sync times
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS metadata (
+		key TEXT PRIMARY KEY,
+		value TEXT NOT NULL,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	)`)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to create metadata table")
+	}
+
+	// Migrate existing data: add language column if it doesn't exist
+	_, err = db.Exec(`ALTER TABLE jokes ADD COLUMN language TEXT NOT NULL DEFAULT 'en'`)
+	if err != nil {
+		// Column already exists or other error - check if it's the "duplicate column" error
+		if !strings.Contains(err.Error(), "duplicate column") {
+			log.Warn().Err(err).Msg("Migration warning (this is normal if column already exists)")
+		}
+	}
+
+	// Migrate existing data: add shown column if it doesn't exist
+	_, err = db.Exec(`ALTER TABLE jokes ADD COLUMN shown BOOLEAN NOT NULL DEFAULT 0`)
+	if err != nil {
+		// Column already exists or other error - check if it's the "duplicate column" error
+		if !strings.Contains(err.Error(), "duplicate column") {
+			log.Warn().Err(err).Msg("Migration warning (this is normal if column already exists)")
+		}
+	}
+
+	// For German jokes, sync from markdown if needed
+	if language == "de" {
+		if err := syncGermanJokesIfNeeded(); err != nil {
+			log.Warn().Err(err).Msg("Failed to sync German jokes, will use existing database")
+		}
 	}
 
 	// Get joke
@@ -95,7 +132,7 @@ func initConfig() error {
 	if err != nil {
 		log.Err(err)
 	}
-	dblocation := homedrive + "/.godad"
+	dblocation := filepath.Join(homedrive, ".godad")
 	// Set default values
 	viper.SetDefault("dbdir", dblocation)
 
@@ -103,7 +140,7 @@ func initConfig() error {
 	viper.SetConfigName("config")
 	viper.SetConfigType("env")
 	viper.AddConfigPath(".")
-	viper.AddConfigPath(homedrive + "/.godad")
+	viper.AddConfigPath(filepath.Join(homedrive, ".godad"))
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
 			return fmt.Errorf("error reading config file: %w", err)
@@ -143,6 +180,12 @@ func setAPIURL() {
 
 // getFreshJoke fetches a joke that hasn't been used before
 func getFreshJoke() (string, error) {
+	// German jokes: get from database (already synced)
+	if language == "de" {
+		return getUnshownGermanJoke()
+	}
+
+	// English jokes: fetch from API
 	maxRetries := 5
 	for i := 0; i < maxRetries; i++ {
 		joke, err := getJoke()
@@ -150,16 +193,16 @@ func getFreshJoke() (string, error) {
 			return "", fmt.Errorf("error fetching joke from API: %w", err)
 		}
 
-		// Check if joke exists in database
+		// Check if joke exists in database for this language
 		var count int
-		err = db.QueryRow("SELECT COUNT(*) FROM jokes WHERE joke = ?", joke).Scan(&count)
+		err = db.QueryRow("SELECT COUNT(*) FROM jokes WHERE joke = ? AND language = ?", joke, language).Scan(&count)
 		if err != nil {
 			return "", fmt.Errorf("error checking joke existence: %w", err)
 		}
 
 		if count == 0 {
-			// Joke doesn't exist, insert it and return
-			_, err = db.Exec("INSERT INTO jokes (joke) VALUES (?)", joke)
+			// Joke doesn't exist, insert it and mark as shown
+			_, err = db.Exec("INSERT INTO jokes (joke, language, shown) VALUES (?, ?, 1)", joke, language)
 			if err != nil {
 				return "", fmt.Errorf("error inserting joke: %w", err)
 			}
@@ -174,45 +217,92 @@ func getFreshJoke() (string, error) {
 	return "", fmt.Errorf("could not find a new joke after %d attempts", maxRetries)
 }
 
+// getUnshownGermanJoke gets a random unshown German joke from the database and marks it as shown
+func getUnshownGermanJoke() (string, error) {
+	// Try to get an unshown joke
+	var joke string
+	var id int64
+	err := db.QueryRow("SELECT id, joke FROM jokes WHERE language = 'de' AND shown = 0 ORDER BY RANDOM() LIMIT 1").Scan(&id, &joke)
+
+	if err == sql.ErrNoRows {
+		// All jokes have been shown, reset them
+		log.Info().Msg("All German jokes have been shown! Resetting...")
+		_, err := db.Exec("UPDATE jokes SET shown = 0 WHERE language = 'de'")
+		if err != nil {
+			return "", fmt.Errorf("error resetting shown status: %w", err)
+		}
+
+		// Try again
+		err = db.QueryRow("SELECT id, joke FROM jokes WHERE language = 'de' AND shown = 0 ORDER BY RANDOM() LIMIT 1").Scan(&id, &joke)
+		if err != nil {
+			return "", fmt.Errorf("error getting joke after reset: %w", err)
+		}
+	} else if err != nil {
+		return "", fmt.Errorf("error getting unshown joke: %w", err)
+	}
+
+	// Mark the joke as shown
+	_, err = db.Exec("UPDATE jokes SET shown = 1 WHERE id = ?", id)
+	if err != nil {
+		return "", fmt.Errorf("error marking joke as shown: %w", err)
+	}
+
+	return joke, nil
+}
+
 // getJoke fetches a joke from the API
 func getJoke() (string, error) {
 	// Create a new HTTP client with a timeout
 	client := &http.Client{
 		Timeout: 10 * time.Second,
 	}
-	var resp *http.Response
 
 	// Try to get a joke from the selected API
-	if apiURL != "" {
-		req, err := http.NewRequest("GET", apiURL, nil)
-		if err != nil {
-			return "", fmt.Errorf("error creating request: %w", err)
-		}
-		req.Header.Set("User-Agent", "https://github.com/lhaig/godad")
-		req.Header.Set("Accept", "application/json")
-
-		resp, err = client.Do(req)
-		if err != nil {
-			return "", fmt.Errorf("error sending request: %w", err)
-		}
-		defer resp.Body.Close()
-
-		// Check if the response is JSON
-		if resp.Header.Get("Content-Type") == "application/json" {
-			body, err := io.ReadAll(resp.Body)
-			if err != nil {
-				return "", fmt.Errorf("error reading response body: %w", err)
-			}
-
-			var responseObject ResponseObject
-			if err := json.Unmarshal(body, &responseObject); err != nil {
-				return "", fmt.Errorf("error parsing JSON: %w", err)
-			}
-			return responseObject.Joke, nil
-		}
+	if apiURL == "" {
+		return "", fmt.Errorf("no valid API URL provided")
 	}
 
-	return "", fmt.Errorf("no valid API URL provided or no jokes found")
+	req, err := http.NewRequest("GET", apiURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("error creating request: %w", err)
+	}
+	req.Header.Set("User-Agent", "https://github.com/lhaig/godad")
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("error sending request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("error reading response body: %w", err)
+	}
+
+	// Check if the response is JSON
+	contentType := resp.Header.Get("Content-Type")
+	if strings.Contains(contentType, "application/json") {
+		var responseObject ResponseObject
+		if err := json.Unmarshal(body, &responseObject); err != nil {
+			return "", fmt.Errorf("error parsing JSON: %w", err)
+		}
+		return responseObject.Joke, nil
+	}
+
+	// If not JSON, treat as markdown (for German jokes)
+	jokes := extractJokesFromMarkdown(string(body))
+	if len(jokes) == 0 {
+		return "", fmt.Errorf("no jokes found in markdown content")
+	}
+
+	// Return a random joke from the markdown
+	return jokes[randInt(len(jokes))], nil
+}
+
+// randInt returns a random integer between 0 and max-1
+func randInt(max int) int {
+	return int(time.Now().UnixNano() % int64(max))
 }
 
 // extractJokesFromMarkdown extracts jokes from the markdown content
@@ -229,12 +319,108 @@ func extractJokesFromMarkdown(markdown string) []string {
 	return jokes
 }
 
-// getRandomJokeFromDB retrieves a random joke from the database
+// getRandomJokeFromDB retrieves a random joke from the database for the current language
 func getRandomJokeFromDB() (string, error) {
 	var joke string
-	err := db.QueryRow("SELECT joke FROM jokes ORDER BY RANDOM() LIMIT 1").Scan(&joke)
+	err := db.QueryRow("SELECT joke FROM jokes WHERE language = ? ORDER BY RANDOM() LIMIT 1", language).Scan(&joke)
 	if err != nil {
 		return "", fmt.Errorf("error getting random joke from database: %w", err)
 	}
 	return joke, nil
+}
+
+// syncGermanJokesIfNeeded checks if German jokes need to be synced and syncs them if necessary
+func syncGermanJokesIfNeeded() error {
+	const syncInterval = 7 * 24 * time.Hour // 7 days
+
+	// Check when we last synced
+	var lastSyncStr string
+	err := db.QueryRow("SELECT value FROM metadata WHERE key = 'german_jokes_last_sync'").Scan(&lastSyncStr)
+
+	needsSync := false
+	if err == sql.ErrNoRows {
+		// Never synced before
+		needsSync = true
+	} else if err != nil {
+		return fmt.Errorf("error checking last sync time: %w", err)
+	} else {
+		// Parse the last sync time
+		lastSync, err := time.Parse(time.RFC3339, lastSyncStr)
+		if err != nil {
+			log.Warn().Err(err).Msg("Invalid last sync time, will re-sync")
+			needsSync = true
+		} else if time.Since(lastSync) > syncInterval {
+			needsSync = true
+		}
+	}
+
+	if needsSync {
+		log.Info().Msg("Syncing German jokes from markdown...")
+		return syncGermanJokes()
+	}
+
+	return nil
+}
+
+// syncGermanJokes downloads the German jokes markdown and adds new jokes to the database
+func syncGermanJokes() error {
+	// Download the markdown content
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+
+	req, err := http.NewRequest("GET", deAPIURL, nil)
+	if err != nil {
+		return fmt.Errorf("error creating request: %w", err)
+	}
+	req.Header.Set("User-Agent", "https://github.com/lhaig/godad")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("error downloading German jokes: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("error reading response body: %w", err)
+	}
+
+	// Extract jokes from markdown
+	jokes := extractJokesFromMarkdown(string(body))
+	if len(jokes) == 0 {
+		return fmt.Errorf("no jokes found in markdown")
+	}
+
+	// Insert new jokes (skip duplicates)
+	newJokesCount := 0
+	for _, joke := range jokes {
+		// Check if joke already exists
+		var count int
+		err := db.QueryRow("SELECT COUNT(*) FROM jokes WHERE joke = ? AND language = 'de'", joke).Scan(&count)
+		if err != nil {
+			log.Warn().Err(err).Str("joke", joke).Msg("Error checking joke existence")
+			continue
+		}
+
+		if count == 0 {
+			// Insert new joke
+			_, err = db.Exec("INSERT INTO jokes (joke, language, shown) VALUES (?, 'de', 0)", joke)
+			if err != nil {
+				log.Warn().Err(err).Str("joke", joke).Msg("Error inserting joke")
+				continue
+			}
+			newJokesCount++
+		}
+	}
+
+	// Update last sync time
+	now := time.Now().Format(time.RFC3339)
+	_, err = db.Exec(`INSERT OR REPLACE INTO metadata (key, value, updated_at) VALUES ('german_jokes_last_sync', ?, CURRENT_TIMESTAMP)`, now)
+	if err != nil {
+		return fmt.Errorf("error updating last sync time: %w", err)
+	}
+
+	log.Info().Int("new_jokes", newJokesCount).Int("total_jokes", len(jokes)).Msg("German jokes synced successfully")
+	return nil
 }
